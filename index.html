@@ -327,6 +327,18 @@
   paintToken();
   if (!tok()) $("settings").open = true;
   refresh();
+
+  /* 安卓「快捷指令」：长按桌面图标 → 写日记 / 传账单，带 ?focus= 直接落到那一段。
+     只做滚动 + 聚焦，不主动弹文件选择器（没有用户手势时浏览器会拦掉）。 */
+  (function(){
+    var m = /[?&]focus=(diary|money)/.exec(location.search);
+    if (!m) return;
+    var target = m[1] === "diary" ? "diaryText" : "billBtn";
+    var el = $(target);
+    if (!el) return;
+    try { el.scrollIntoView({ block: "center" }); } catch(e){ el.scrollIntoView(); }
+    if (m[1] === "diary") setTimeout(function(){ try { el.focus(); } catch(e){} }, 120);
+  })();
 })();
 </script>
 </body>
