@@ -60,6 +60,7 @@
   .pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--card2);color:var(--dim);border:1px solid var(--line)}
   .pill.ok{color:var(--ok);border-color:rgba(46,204,113,.35)}
   .pill.no{color:var(--warn);border-color:rgba(245,166,35,.35)}
+  .today{margin-top:12px;font-size:13.5px;color:var(--dim)}
   details{margin-top:6px}
   summary{cursor:pointer;font-size:14px;color:var(--dim);padding:10px 0;list-style:none}
   summary::-webkit-details-marker{display:none}
@@ -83,9 +84,8 @@
   <p class="hint">从咔皮记账导出 xlsx，存到手机的「文件」里，然后在这里选它。传上去以后云端每小时自己入库、分类、重画看板。</p>
   <input type="file" id="billFile" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
   <button class="btn" id="billBtn">选择账单文件</button>
-  <div class="status" id="billStatus">
-    今天：<span class="pill" id="billToday">查不到</span>
-  </div>
+  <div class="today">今天：<span class="pill" id="billToday">查不到</span></div>
+  <div class="status" id="billStatus"></div>
 </section>
 
 <!-- ───────────── 日记 ───────────── -->
@@ -96,9 +96,8 @@
   <input type="date" id="diaryDate">
   <textarea id="diaryText" placeholder="今天……"></textarea>
   <button class="btn" id="diaryBtn" style="margin-top:12px">存进日记</button>
-  <div class="status" id="diaryStatus">
-    <span class="pill" id="diaryToday">查不到</span>
-  </div>
+  <div class="today">今天：<span class="pill" id="diaryToday">查不到</span></div>
+  <div class="status" id="diaryStatus"></div>
 </section>
 
 <!-- ───────────── 设置 ───────────── -->
@@ -154,7 +153,18 @@
     return h;
   }
 
-  function setStatus(el, cls, msg){ el.className = "status " + (cls||""); el.textContent = msg; }
+  function setStatus(el, cls, msg){
+    if (!el) return;
+    el.className = "status " + (cls || "");
+    el.textContent = msg;
+  }
+  function setPill(id, text, cls){
+    var p = $(id);
+    if (!p) return;
+    p.textContent = text;
+    p.className = "pill " + (cls || "");
+  }
+  function errText(e){ return (e && e.message) ? e.message : String(e); }
 
   /* ---------- GitHub Contents API ---------- */
 
@@ -167,6 +177,22 @@
       if (r.status === 403) throw new Error("令牌权限不够（HTTP 403），Contents 要给 Read and write");
       if (!r.ok) throw new Error("读取 " + path + " 失败 HTTP " + r.status);
       return r.json().then(function(j){ return j.sha; });
+    });
+  }
+
+  /* 列目录（Contents API 对目录返回数组，不是对象） */
+  function listDir(path){
+    var url = API + "/repos/" + REPO + "/contents/" + encodeURI(path) +
+              "?ref=" + BRANCH + "&t=" + Date.now();
+    return fetch(url, { headers: hdrs(), cache: "no-store" }).then(function(r){
+      if (r.status === 404) return [];
+      if (r.status === 401) throw new Error("令牌无效或已过期（HTTP 401）");
+      if (r.status === 403) throw new Error("令牌权限不够（HTTP 403），Contents 要给 Read and write");
+      if (!r.ok) throw new Error("读目录 " + path + " 失败 HTTP " + r.status);
+      return r.json().then(function(j){
+        if (!j || typeof j.length !== "number") return [];
+        return j.map(function(x){ return x.name; });
+      });
     });
   }
 
@@ -244,7 +270,7 @@
           });
         });
       })
-      .catch(function(e){ setStatus($("tokenStatus"), "bad", "测试失败：" + e.message); });
+      .catch(function(e){ setStatus($("tokenStatus"), "bad", "测试失败：" + errText(e)); });
   };
 
   /* ---------- 账单 ---------- */
@@ -270,10 +296,9 @@
       put(path, bytes, "手机上传账单：" + f.name)
         .then(function(){
           setStatus($("billStatus"), "ok", "✅ 已传到 " + path + "，等云端下一次整点 17 分处理");
-          $("billToday").className = "pill ok";
-          $("billToday").textContent = "已上传";
+          setPill("billToday", "今天已传", "ok");
         })
-        .catch(function(e){ setStatus($("billStatus"), "bad", "上传失败：" + e.message); })
+        .catch(function(e){ setStatus($("billStatus"), "bad", "上传失败：" + errText(e)); })
         .then(function(){
           btn.disabled = false; btn.textContent = "选择账单文件";
           billInput.value = "";
@@ -302,12 +327,9 @@
       .then(function(){
         setStatus($("diaryStatus"), "ok", "✅ " + d + " 已存进收件箱（" + text.length + " 字），等云端下一次整点 17 分转成正式日记");
         $("diaryText").value = "";
-        if (d === today()){
-          $("diaryToday").className = "pill ok";
-          $("diaryToday").textContent = "已存";
-        }
+        if (d === today()) setPill("diaryToday", "今天已存", "ok");
       })
-      .catch(function(e){ setStatus($("diaryStatus"), "bad", "保存失败：" + e.message); })
+      .catch(function(e){ setStatus($("diaryStatus"), "bad", "保存失败：" + errText(e)); })
       .then(function(){ btn.disabled = false; btn.textContent = "存进日记"; });
   };
 
@@ -317,9 +339,14 @@
     if (!tok()) return;
     var d = today();
     getSha("life/raw/diary/inbox/" + d + ".txt").then(function(sha){
-      $("diaryToday").className = "pill " + (sha ? "ok" : "no");
-      $("diaryToday").textContent = sha ? "今天已存" : "今天还没存";
-    }).catch(function(){});
+      setPill("diaryToday", sha ? "今天已存" : "今天还没存", sha ? "ok" : "no");
+    }).catch(function(){ setPill("diaryToday", "查不到", ""); });
+
+    var stamp = d.replace(/-/g, "");   /* 20261017 */
+    listDir("life/raw/money").then(function(names){
+      var hit = names.filter(function(n){ return n.indexOf(stamp) >= 0; }).length;
+      setPill("billToday", hit ? ("今天已传 " + hit + " 份") : "今天还没传", hit ? "ok" : "no");
+    }).catch(function(){ setPill("billToday", "查不到", ""); });
   }
 
   /* ---------- 启动 ---------- */
