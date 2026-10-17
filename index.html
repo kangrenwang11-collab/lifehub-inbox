@@ -125,7 +125,8 @@
 
 <footer>
   传到 <code>kangrenwang11-collab/lifehub-data</code><br>
-  云端每小时的第 17 分处理一次（北京时间 07:17–23:17）
+  云端每小时的第 17 分处理一次（北京时间 07:17–23:17）<br>
+  <span id="ver" style="opacity:.45;font-size:11.5px">v-</span>
 </footer>
 
 <script>
@@ -136,6 +137,7 @@
   var BRANCH = "main";
   var KEY    = "lh_gh_token";
   var API    = "https://api.github.com";
+  var VER    = "2026-10-17.3";
 
   var $ = function(id){ return document.getElementById(id); };
 
@@ -350,6 +352,7 @@
   }
 
   /* ---------- 启动 ---------- */
+  if ($("ver")) $("ver").textContent = "v" + VER;
   $("diaryDate").value = today();
   paintToken();
   if (!tok()) $("settings").open = true;
